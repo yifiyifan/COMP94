@@ -1,0 +1,17 @@
+job_family: [
+  "accountant", 
+  "civil engineer"
+  "data analyst", 
+  "data engineer", 
+  "electrical engineer"
+  "financial advisor",
+  "graphic designer"
+  "mechanical engineer" 
+  "software enigneer", 
+  "sales"
+]
+experience_level: [
+  "junior",
+  "senior",
+  "director"
+]

@@ -4,3 +4,5 @@ selenium
 numpy
 requests
 webdriver-manager
+sentence-transformers
+sentencepiece

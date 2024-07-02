@@ -1,0 +1,12 @@
+workflow 
+1. need to know how to share data with hugging face 
+2. github lfs??
+3. get the job post dataset
+4. sample jobs 10 professions, 3 levels of seniority, up to 10 exmaples of job post per profession per level. for each job post, sample 20 good, 20 bad 
+
+10*3*10*40 = 12000 labelled dataset
+
+1. loop through linked in job post dataset 
+    1. use flan-t5 to get job family, minimum years of experience, level, description of skills
+    2. if job family is in selected add 
+2. class to 

@@ -9,6 +9,15 @@ import numpy as np
 from bs4 import BeautifulSoup
 import bs4
 import requests
+import re
+import hashlib
+
+pattern_job_title = r'.+(?=\sresume example with)'
+pattern_num_year = r'(?<=resume example with\s)[0-9]+'
+pattern = re.compile(r'^SECTION_(SUMM|HILT|EDUC|EXPR|SKLL).+$')
+
+def id(x):
+    return int(hashlib.md5(x.encode('utf-8')).hexdigest(), 16)
 
 # Set the path to the Edge binary (optional)
 edge_options = Options()
@@ -18,55 +27,89 @@ edge_options = Options()
 service = Service(EdgeChromiumDriverManager().install())
 driver = webdriver.Edge(service=service, options=edge_options)
 
-job_list = ['HR', 'designer', 'Information-Technology',
-       'Teacher', 'Advocate', 'Business-Development',
-       'Healthcare', 'Fitness', 'Agriculture', 'BPO', 'Sales', 'Consultant',
-       'Digital-Media', 'Automobile', 'Chef', 'Finance',
-       'Apparel', 'Engineering', 'Accountant', 'Construction',
-       'Public-Relations', 'Banking', 'Arts', 'Aviation']
+job_list = [
+    'accountant', 
+    'chef', 
+    'data analyst', 
+    'software engineer', 
+    'vet',
+    'salesperson',
+]
+MAX_PAGE = 2
 
 df = pd.DataFrame()
 category = []
 link = []
+job_title=[]
+years_of_experience = []
+resume_text = []
 
 for job in job_list:
-    JOB = job.lower()
-    for i in range(1,13):   # INCREASE THE RANGE TO GET MORE RESUME DATA
-        PAGE = str(i)
+    JOB = job.lower().replace(" ","%20")
+    for i in range(MAX_PAGE):   # INCREASE THE RANGE TO GET MORE RESUME DATA
+        PAGE = str(i+1)
         URL = "https://www.livecareer.com/resume-search/search?jt=" + JOB + "&bg=85&eg=100&comp=&mod=&pg=" + PAGE
         driver.get(URL)
         a_tags_in_div = driver.find_elements(By.CSS_SELECTOR, 'div a')
 
         for a in a_tags_in_div:
             if a.get_attribute('class') == "sc-1dzblrg-0 caJIKu sc-1os65za-2 jhoVRR":
-                category.append(JOB)
+                category.append(job)
                 link.append(a.get_attribute('href'))
 
 df["Category"] = category
 df["link"] = link
-
-import hashlib
-def id(x):
-    return int(hashlib.md5(x.encode('utf-8')).hexdigest(), 16)
-
 df["id"] = df["link"].apply(id)
 
-df["Resume"] = ""
-df["Raw_html"] = ""
+def scrape_resume_link(driver:webdriver.Edge, job_family:str, exp_level:str, min_rating:int=85, max_rating:int=100, max_page:int=5):
+    """Return a list of resume links matching the search criteria"""
+    result = []
+    search_keyword = " ".join([exp_level, job_family]).lower().replace(" ","%20")
+    for i in range(max_page):   
+        page_no = str(i+1)
+        url = f"https://www.livecareer.com/resume-search/search?jt={search_keyword}&bg={str(min_rating)}&eg={str(max_rating)}&comp=&mod=&pg={page_no}"
+        driver.get(url)
+        a_tags_in_div = driver.find_elements(By.CSS_SELECTOR, 'div a') 
+        for a in a_tags_in_div:
+            if a.get_attribute('class') == "sc-1dzblrg-0 caJIKu sc-1os65za-2 jhoVRR":
+                result.append(a.get_attribute('href'))
+    return result
 
-for i in range(df.shape[0]):
-    url = df.link[i]
-    driver.get(url)
-#     time.sleep(0.5)                  #ADDED DELAY, CAN BE REMOVED
-    x = driver.page_source
-    x = x.replace(">","> ")
-    soup = bs4.BeautifulSoup(x, 'html.parser')
-    div = soup.find("div", {"id": "document"})
-    df.Raw_html[i] = div
+def get_resume_info(driver:webdriver.Edge, link:str):
+    """Return job title, resume text, years of experience"""
     try:
-        df.Resume[i] = div.text
-    except:
-#         ADD EXCEPTION IF REQUIRED
+        # tmp_resume = '' 
+        # tmp_years = '' 
+        # tmp_job_title = ''
+        driver.get(link)
+        html_content = driver.page_source
+        soup = BeautifulSoup(html_content, 'html.parser')
+        divs = soup.find_all('div', id=pattern)
+        tmp_resume = "\n".join([div.get_text(strip=True)for div in divs])
+        page_title = soup.find_all('h2', class_='title')[0].get_text(strip=False)
+        tmp_job_title = re.findall(pattern_job_title, page_title)[0]
+        tmp_years = re.findall(pattern_num_year, page_title)[0]
+    except Exception:
+        return None, None, None
+    finally:
+        return tmp_job_title, tmp_resume, tmp_years
+
+for l in df['link']:
+    try:        
+        title, resume, num_years = get_resume_info(driver, l)
+    except Exception:
         pass
+    finally:
+        job_title.append(title)
+        resume_text.append(resume)
+        years_of_experience.append(num_years)
+
+df['job_title'] = job_title
+df['resume_text'] = resume_text
+df['years_of_experience'] = years_of_experience
+
+print(f"scraped {df.shape[0]} resume")
 
 df.to_csv("result.csv", index=False)
+
+
