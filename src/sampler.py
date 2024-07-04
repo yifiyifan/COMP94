@@ -51,7 +51,7 @@ def query_flan_t5(
     inputs = tokenizer(input_text, return_tensors='pt')
 
     # Generate the answer
-    outputs = model.generate(**inputs)
+    outputs = model.generate(**inputs, max_new_tokens=50)
     answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     if choices is not None:                     # if multiple choice
@@ -87,16 +87,16 @@ def query_flan_t5(
         return answer                           # if not multiple choice, return the predicted value directly
 
 def build_choices_dict(options_list:list[str], incl_others:bool=True):
+    tmp_list = options_list.copy() # make a copy to not mess with the original list
     if incl_others:
-        options_list.append("none of the above")
-    num_options = len(options_list)
-    return {key:val for key, val in zip(string.ascii_uppercase[0:num_options], options_list)}
+        tmp_list.append("none of the above")
+    num_options = len(tmp_list)
+    return {key:val for key, val in zip(string.ascii_uppercase[0:num_options], tmp_list)}
 
-def extract_job_attribute(
+
+def extract_job_title(
     job_post_text:str, 
     job_family_options:list[str], 
-    level_of_experience_options:list[str],
-    definitions_loc:dict,
     model:T5ForConditionalGeneration,
     tokenizer:T5Tokenizer,
 ):
@@ -106,10 +106,26 @@ def extract_job_attribute(
     q1_choices = build_choices_dict(job_family_options)
     q1_answer = query_flan_t5(model, tokenizer, job_post_text, q1_question, q1_choices)
 
+    return q1_answer
+
+def extract_job_attribute(
+    job_post_text:str, 
+    # job_family_options:list[str], 
+    level_of_experience_options:list[str],
+    definitions_loc:dict,
+    model:T5ForConditionalGeneration,
+    tokenizer:T5Tokenizer,
+):
+    """return job family, level of experience, minimum years of experience"""
+
+    # q1_question = "What is the job family described in the job title and job description?"
+    # q1_choices = build_choices_dict(job_family_options)
+    # q1_answer = query_flan_t5(model, tokenizer, job_post_text, q1_question, q1_choices)
+
     q2_question = "What is the minimum number of years of experience required in this job post answer as an integer?"
     q2_answer = query_flan_t5(model, tokenizer, job_post_text, q2_question, return_int=True)
 
-    q3_question = "What level of experience is indicated by the responsibility described in this job posting?"
+    q3_question = "What level of experience is indicated by the responsibility described in this job posting? if it cannot be inferred from the context, return -99."
     q3_choices = build_choices_dict(level_of_experience_options)
     definitions = open(os.path.join(os.getcwd(), *definitions_loc["experience_level"])).read() 
     q3_answer = query_flan_t5(model, tokenizer, definitions+job_post_text, q3_question, q3_choices)
@@ -117,7 +133,7 @@ def extract_job_attribute(
     q4_question = "What skills does the job applicant must have for this role? do not include qualification and years of experience."
     q4_answer = query_flan_t5(model, tokenizer, job_post_text, q4_question)
 
-    return q1_answer, q2_answer, q3_answer, q4_answer
+    return q2_answer, q3_answer, q4_answer
 
 def find_job_posting(job_family:str, level_of_experience:str, job_posting_df) -> list:
     """Return a list of job_id"""

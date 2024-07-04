@@ -5,6 +5,7 @@
 
 from src.sampler import (
     extract_job_attribute,
+    extract_job_title,
 )
 
 
@@ -23,7 +24,7 @@ CONFIG = yaml.load(
     Loader = yaml.FullLoader
 )
 
-JOB_POSTING_PATH = os.path.join(os.getcwd(), "data", "job_postings_dev_debug.csv")
+JOB_POSTING_PATH = os.path.join(os.getcwd(), "data", "job_postings_dev.csv")
 FLAN_T5_MODEL_NAME = "google/flan-t5-large"
 
 if __name__ == "__main__":
@@ -33,34 +34,55 @@ if __name__ == "__main__":
     tokenizer = T5Tokenizer.from_pretrained(FLAN_T5_MODEL_NAME)
     model = T5ForConditionalGeneration.from_pretrained(FLAN_T5_MODEL_NAME)
 
+    job_id_col = job_posting_df["job_id"]
     job_postings_desc_col = job_posting_df["description"]
     job_title_col = job_posting_df["title"]
     
-    job_family_col = []
-    level_of_experience_col = []
-    years_of_experience_col = []
-    required_skills_col = []
+    # job_family_col = []
+    # level_of_experience_col = []
+    # years_of_experience_col = []
+    # required_skills_col = []
 
-    for title, desc in tqdm(zip(job_title_col, job_postings_desc_col)):
-        # TODO: add confidence scoring to filter out bad answers
-        job_fam, years, level, skill = extract_job_attribute(
-            job_post_text= f"job title: {title}. description: {desc}",
+    extracted_info = []
+
+    for id, title, desc in tqdm(zip(job_id_col, job_title_col, job_postings_desc_col)):
+        job_fam = extract_job_title(
+            job_post_text= f"job title in this job post is {title}",
             job_family_options=CONFIG["job_family"],
-            level_of_experience_options=CONFIG["experience_level"],
-            definitions_loc=CONFIG["definitions_loc"],
             model=model,
             tokenizer=tokenizer
         )
-        job_family_col.append(job_fam)
-        level_of_experience_col.append(level)
-        years_of_experience_col.append(years)
-        required_skills_col.append(skill)
 
-    job_posting_df_extracted = job_posting_df[["job_id", "title", "description"]]
-    job_posting_df_extracted["job_family"] = job_family_col
-    job_posting_df_extracted["level"] = level_of_experience_col
-    job_posting_df_extracted["years_of_experience"] = years_of_experience_col
-    job_posting_df_extracted["skills"] = required_skills_col
+        if job_fam in CONFIG["job_family"]:
+            # TODO: add confidence scoring to filter out bad answers
+            years, level, skill = extract_job_attribute(
+                job_post_text= f"job title: {title}. description: {desc}",
+                # job_family_options=CONFIG["job_family"],
+                level_of_experience_options=CONFIG["experience_level"],
+                definitions_loc=CONFIG["definitions_loc"],
+                model=model,
+                tokenizer=tokenizer
+            )
+
+            extracted_info.append((id, title, desc, job_fam, years, level, skill))
+        else:
+            extracted_info.append((id, title, desc, "out of scope", None, None, None))
+
+        # job_family_col.append(job_fam)
+        # level_of_experience_col.append(level)
+        # years_of_experience_col.append(years)
+        # required_skills_col.append(skill)
+
+    job_posting_df_extracted = pd.DataFrame(
+        data=extracted_info,
+        columns=["id", "title", "desc", "job_fam", "years", "level", "skill"]
+    )
+
+    # job_posting_df_extracted = job_posting_df[["job_id", "title", "description"]]
+    # job_posting_df_extracted["job_family"] = job_family_col
+    # job_posting_df_extracted["level"] = level_of_experience_col
+    # job_posting_df_extracted["years_of_experience"] = years_of_experience_col
+    # job_posting_df_extracted["skills"] = required_skills_col
 
     try:
         job_posting_df_extracted.to_csv(

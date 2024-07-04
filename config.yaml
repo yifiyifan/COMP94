@@ -13,3 +13,4 @@ experience_level: [
 
 definitions_loc:
   experience_level: ["data","definitions","experience_level.txt"]
+  job_family: ["data","definitions","job_family.txt"]
