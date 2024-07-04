@@ -1,17 +1,15 @@
 job_family: [
   "accountant", 
-  "civil engineer"
-  "data analyst", 
+  "analyst", 
   "data engineer", 
-  "electrical engineer"
-  "financial advisor",
-  "graphic designer"
-  "mechanical engineer" 
+  "electrical engineer",
   "software enigneer", 
-  "sales"
 ]
 experience_level: [
-  "junior",
-  "senior",
+  "junior-level",
+  "senior-level",
   "director"
 ]
+
+definitions_loc:
+  experience_level: ["data","definitions","experience_level.txt"]
