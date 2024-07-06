@@ -57,7 +57,6 @@ if __name__ == "__main__":
             # TODO: add confidence scoring to filter out bad answers
             years, level, skill = extract_job_attribute(
                 job_post_text= f"job title: {title}. description: {desc}",
-                # job_family_options=CONFIG["job_family"],
                 level_of_experience_options=CONFIG["experience_level"],
                 definitions_loc=CONFIG["definitions_loc"],
                 model=model,
@@ -68,21 +67,10 @@ if __name__ == "__main__":
         else:
             extracted_info.append((id, title, desc, "out of scope", None, None, None))
 
-        # job_family_col.append(job_fam)
-        # level_of_experience_col.append(level)
-        # years_of_experience_col.append(years)
-        # required_skills_col.append(skill)
-
     job_posting_df_extracted = pd.DataFrame(
         data=extracted_info,
         columns=["id", "title", "desc", "job_fam", "years", "level", "skill"]
     )
-
-    # job_posting_df_extracted = job_posting_df[["job_id", "title", "description"]]
-    # job_posting_df_extracted["job_family"] = job_family_col
-    # job_posting_df_extracted["level"] = level_of_experience_col
-    # job_posting_df_extracted["years_of_experience"] = years_of_experience_col
-    # job_posting_df_extracted["skills"] = required_skills_col
 
     try:
         job_posting_df_extracted.to_csv(
