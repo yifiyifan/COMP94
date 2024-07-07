@@ -166,29 +166,6 @@ def extract_job_title(
 
     return q1_answer
 
-def extract_job_attribute(
-    job_post_text:str,  
-    level_of_experience_options:list[str],
-    definitions_loc:dict,
-    model:T5ForConditionalGeneration,
-    tokenizer:T5Tokenizer,
-):
-    """return job family, level of experience, minimum years of experience"""
-    q2_question = "What is the minimum number of years of experience specified in the context as an integer? It is possible that the context did not mention a minimum years of experience."
-    q2_answer = query_flan_t5(model, tokenizer, q2_question, job_post_text, return_int=True)
-
-    # q3_question = "What level of experience is indicated by the responsibility described in this job posting?"
-    # q3_choices = build_choices_dict(level_of_experience_options)
-    # definitions = open(os.path.join(os.getcwd(), *definitions_loc["experience_level"])).read() 
-    # q3_answer = query_flan_t5(model, tokenizer, definitions+" "+job_post_text, q3_question, q3_choices)
-
-    q4_question = "What skills does the job applicant must have for this role? do not include qualification and years of experience."
-    q4_answer = query_flan_t5(model, tokenizer, q4_question, job_post_text)
-
-    return q2_answer, q4_answer
-
-
-
 def extract_years_of_experience(
     job_post_text:str,  
     model:T5ForConditionalGeneration,

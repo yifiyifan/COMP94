@@ -44,44 +44,31 @@ if __name__ == "__main__":
     extracted_info = []
 
     for id, title, desc in zip(job_id_col, job_title_col, job_postings_desc_col):
-        print("start: " + title)
-        job_fam = extract_job_title(
-            job_post_text= f"job title in this job post is {title}",
-            job_family_options=CONFIG["job_family"],
-            model=model,
-            tokenizer=tokenizer
-        )
-        print("job fam done")
-        clean_desc = clean_string(desc)
-        if job_fam in CONFIG["job_family"]:
-            # TODO: add confidence scoring to filter out bad answers
-            # years, skill = extract_job_attribute(
-            #     job_post_text= f"job title: {title}. description: {clean_desc}",
-            #     level_of_experience_options=CONFIG["experience_level"],
-            #     definitions_loc=CONFIG["definitions_loc"],
-            #     model=model,
-            #     tokenizer=tokenizer
-            # )
-
-            years = extract_years_of_experience(
-                job_post_text= f"job title: {title}. description: {clean_desc}",
+        try:
+            job_fam = extract_job_title(
+                job_post_text= f"job title in this job post is {title}",
+                job_family_options=CONFIG["job_family"],
                 model=model,
                 tokenizer=tokenizer
             )
-
-            print("years extracted")
-
-            skill = extract_required_skills(
-                job_post_text= f"job title: {title}. description: {clean_desc}",
-                job_family=job_fam,
-                model=model,
-                tokenizer=tokenizer
-            )
-            print("skills extracted")
-
-            extracted_info.append((id, title, clean_desc, job_fam, years, skill))
-        else:
-            extracted_info.append((id, title, clean_desc, None, None, None))
+            clean_desc = clean_string(desc)
+            if job_fam in CONFIG["job_family"]:
+                years = extract_years_of_experience(
+                    job_post_text= f"job title: {title}. description: {clean_desc}",
+                    model=model,
+                    tokenizer=tokenizer
+                )
+                skill = extract_required_skills(
+                    job_post_text= f"job title: {title}. description: {clean_desc}",
+                    job_family=job_fam,
+                    model=model,
+                    tokenizer=tokenizer
+                )
+                extracted_info.append((id, title, clean_desc, job_fam, years, skill))
+            else:
+                extracted_info.append((id, title, clean_desc, None, None, None))
+        except:
+            pass # skip this role if encountered error
 
     job_posting_df_extracted = pd.DataFrame(
         data=extracted_info,
