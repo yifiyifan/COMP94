@@ -4,7 +4,6 @@
 # )
 
 from src.sampler import (
-    # extract_job_attribute,
     extract_job_title,
     extract_required_skills,
     extract_years_of_experience,
