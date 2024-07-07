@@ -3,46 +3,63 @@
 #     get_resume_info,
 # )
 
+# modules in project
+import logging.config
 from src.sampler import (
     extract_job_title,
     extract_required_skills,
     extract_years_of_experience,
+)
+from src.utils import (
     clean_string,
+    format_execution_time,
 )
 
-
+# import required libraries 
 import os 
 import yaml
 import pandas as pd
 from tqdm import tqdm
 from datetime import datetime
 import torch
-
+import logging
 from transformers import T5Tokenizer, T5ForConditionalGeneration
-
+import time
 
 CONFIG = yaml.load(
     open(os.path.join(os.getcwd(), "config.yaml"), "r+"),
     Loader = yaml.FullLoader
 )
 
-JOB_POSTING_PATH = os.path.join(os.getcwd(), "data", "job_postings_dev_debug.csv")
+LOGGING_CONFIG = yaml.load(
+    open(os.path.join(os.getcwd(), "logging_config.yaml"), "r+"),
+    Loader = yaml.FullLoader
+)
+
+JOB_POSTING_PATH = os.path.join(os.getcwd(), "data", "job_postings_dev.csv")
 FLAN_T5_MODEL_NAME = "google/flan-t5-large"
 
-if __name__ == "__main__":
-    
-    job_posting_df = pd.read_csv(JOB_POSTING_PATH)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    tokenizer = T5Tokenizer.from_pretrained(FLAN_T5_MODEL_NAME)
-    model = T5ForConditionalGeneration.from_pretrained(FLAN_T5_MODEL_NAME).to(device)
+logging.config.dictConfig(LOGGING_CONFIG)
+logger = logging.getLogger(__name__)
 
+
+def extract_job_post_info(
+    input_path:str,
+    model_name:str,
+):
+    # set up 
+    job_posting_df = pd.read_csv(input_path)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    tokenizer = T5Tokenizer.from_pretrained(model_name)
+    model = T5ForConditionalGeneration.from_pretrained(model_name).to(device)
     job_id_col = job_posting_df["job_id"]
     job_postings_desc_col = job_posting_df["description"]
     job_title_col = job_posting_df["title"]
-    
     extracted_info = []
 
-    for id, title, desc in zip(job_id_col, job_title_col, job_postings_desc_col):
+    cnt_total_rows = job_posting_df.shape[0]
+
+    for id, title, desc in tqdm(zip(job_id_col, job_title_col, job_postings_desc_col), desc="Extracting",ncols=100, total=cnt_total_rows):
         try:
             job_fam = extract_job_title(
                 job_post_text= f"job title in this job post is {title}",
@@ -67,22 +84,42 @@ if __name__ == "__main__":
             else:
                 extracted_info.append((id, title, clean_desc, None, None, None))
         except:
-            pass # skip this role if encountered error
+            pass # skip this job post if encountered error
+    
+    
+    cnt_extracted_rows = len(extracted_info)
+    stat_message = "Count of job post: %d; extracted: %d" % (cnt_total_rows, cnt_extracted_rows)
+    logger.info(stat_message)
 
-    job_posting_df_extracted = pd.DataFrame(
+    # return convert extracted info as dataframe 
+    return pd.DataFrame(
         data=extracted_info,
         columns=["id", "title", "desc", "job_fam", "years", "skill"]
     )
 
-    try:
-        job_posting_df_extracted.to_csv(
-            os.path.join(os.getcwd(), "data", "job_posting_transformed.csv"),
-            index=False
-        )
-    except PermissionError:
-        time_stamp = current_time = datetime.now().strftime('%Y%m%d%H%M%S')
-        job_posting_df_extracted.to_csv(
-            os.path.join(os.getcwd(), "data", f"job_posting_transformed_{time_stamp}.csv"),
-            index=False
-        )
 
+if __name__ == "__main__":
+
+    start_time = time.time()
+
+    logger.info("Starting the process")
+    
+    logger.info("Extracting info from job posts...")
+    job_post_df_extracted = extract_job_post_info(
+        input_path=JOB_POSTING_PATH,
+        model_name=FLAN_T5_MODEL_NAME,
+    )
+    logger.info("Extraction from job post finished")
+
+    output_path = os.path.join(
+        os.getcwd(), 
+        "data", 
+        f"job_posting_transformed_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+    )
+    
+    logger.info("Saving job post extraction output to %s" % (output_path))
+    job_post_df_extracted.to_csv(output_path,index=False)
+
+    end_time = time.time()
+
+    logger.info("Processed complete in %s" % (format_execution_time(start_time, end_time)))

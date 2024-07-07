@@ -1,3 +1,0 @@
-junior-level positions: junior-level job title may include "junior", "staff", "intern", "graduate" 
-
-senior-level positions: senior-level job title may include "senior", "lead", "principal".   

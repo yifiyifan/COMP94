@@ -8,8 +8,6 @@ from transformers import T5Tokenizer, T5ForConditionalGeneration
 import pandas as pd
 from itertools import product
 import string
-import os
-import re
 
 # model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
@@ -26,13 +24,6 @@ def validate_output(answer:str, choices:dict|list):
         return answer in choices
     else:
         return answer in choices.keys()
-    
-def clean_string(text):
-    # Define the regex pattern to match all characters except alphanumeric and regular punctuations
-    pattern = r'[^a-zA-Z0-9.,!?;:\'\"()\[\]{}<>@#$%^&*+=\-_~`\s]'
-    # Substitute all characters matching the pattern with an empty string
-    cleaned_text = re.sub(pattern, '', text)
-    return cleaned_text
 
 def build_input_text(
     question:str,
@@ -42,7 +33,6 @@ def build_input_text(
     output = f"question: {question}"
 
     if choices is not None:
-        print(choices)
         if isinstance(choices, list):
             choices_txt = ", ".join(choices)
         else:
