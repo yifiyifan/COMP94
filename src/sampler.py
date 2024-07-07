@@ -196,7 +196,7 @@ def extract_required_skills(
     tokenizer:T5Tokenizer,
     chunk_overlap:int=20,    
 ):
-    question = "What skills does the job applicant must have for this role? do not include qualification and years of experience."
+    question = "What skills and experience does the job applicant must have for this role?"
     context_chunks = chunk_context(question, job_post_text, chunk_overlap, tokenizer)
 
     chunk_answer = [query_flan_t5(model, tokenizer, question, c, max_new_tokens=100) for c in context_chunks]
