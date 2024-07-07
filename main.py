@@ -4,8 +4,11 @@
 # )
 
 from src.sampler import (
-    extract_job_attribute,
+    # extract_job_attribute,
     extract_job_title,
+    extract_required_skills,
+    extract_years_of_experience,
+    clean_string,
 )
 
 
@@ -14,7 +17,7 @@ import yaml
 import pandas as pd
 from tqdm import tqdm
 from datetime import datetime
-
+import torch
 
 from transformers import T5Tokenizer, T5ForConditionalGeneration
 
@@ -24,52 +27,65 @@ CONFIG = yaml.load(
     Loader = yaml.FullLoader
 )
 
-JOB_POSTING_PATH = os.path.join(os.getcwd(), "data", "job_postings_dev.csv")
+JOB_POSTING_PATH = os.path.join(os.getcwd(), "data", "job_postings_dev_debug.csv")
 FLAN_T5_MODEL_NAME = "google/flan-t5-large"
 
 if __name__ == "__main__":
     
     job_posting_df = pd.read_csv(JOB_POSTING_PATH)
-
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     tokenizer = T5Tokenizer.from_pretrained(FLAN_T5_MODEL_NAME)
-    model = T5ForConditionalGeneration.from_pretrained(FLAN_T5_MODEL_NAME)
+    model = T5ForConditionalGeneration.from_pretrained(FLAN_T5_MODEL_NAME).to(device)
 
     job_id_col = job_posting_df["job_id"]
     job_postings_desc_col = job_posting_df["description"]
     job_title_col = job_posting_df["title"]
     
-    # job_family_col = []
-    # level_of_experience_col = []
-    # years_of_experience_col = []
-    # required_skills_col = []
-
     extracted_info = []
 
-    for id, title, desc in tqdm(zip(job_id_col, job_title_col, job_postings_desc_col)):
+    for id, title, desc in zip(job_id_col, job_title_col, job_postings_desc_col):
+        print("start: " + title)
         job_fam = extract_job_title(
             job_post_text= f"job title in this job post is {title}",
             job_family_options=CONFIG["job_family"],
             model=model,
             tokenizer=tokenizer
         )
-
+        print("job fam done")
+        clean_desc = clean_string(desc)
         if job_fam in CONFIG["job_family"]:
             # TODO: add confidence scoring to filter out bad answers
-            years, level, skill = extract_job_attribute(
-                job_post_text= f"job title: {title}. description: {desc}",
-                level_of_experience_options=CONFIG["experience_level"],
-                definitions_loc=CONFIG["definitions_loc"],
+            # years, skill = extract_job_attribute(
+            #     job_post_text= f"job title: {title}. description: {clean_desc}",
+            #     level_of_experience_options=CONFIG["experience_level"],
+            #     definitions_loc=CONFIG["definitions_loc"],
+            #     model=model,
+            #     tokenizer=tokenizer
+            # )
+
+            years = extract_years_of_experience(
+                job_post_text= f"job title: {title}. description: {clean_desc}",
                 model=model,
                 tokenizer=tokenizer
             )
 
-            extracted_info.append((id, title, desc, job_fam, years, level, skill))
+            print("years extracted")
+
+            skill = extract_required_skills(
+                job_post_text= f"job title: {title}. description: {clean_desc}",
+                job_family=job_fam,
+                model=model,
+                tokenizer=tokenizer
+            )
+            print("skills extracted")
+
+            extracted_info.append((id, title, clean_desc, job_fam, years, skill))
         else:
-            extracted_info.append((id, title, desc, "out of scope", None, None, None))
+            extracted_info.append((id, title, clean_desc, None, None, None))
 
     job_posting_df_extracted = pd.DataFrame(
         data=extracted_info,
-        columns=["id", "title", "desc", "job_fam", "years", "level", "skill"]
+        columns=["id", "title", "desc", "job_fam", "years", "skill"]
     )
 
     try:

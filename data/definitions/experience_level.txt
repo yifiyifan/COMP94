@@ -1,3 +1,3 @@
-junior-level positions are typically entry-level roles suitable for candidates with zero to few years of experience in the field. Keywords that may indicate junior level include junior, staff, intern, graduate.
-senior-level positions are for individuals with substantial number of years of experience in their field, typically involving more complex responsibilities, leadership, and independent work. Keywords that may indicate senior level include senior, lead, principal.
-director level positions are high-level roles that typically involve strategic planning, decision-making, and overseeing entire departments or functions. These roles usually require extensive experience and leadership skills, and they are responsible for setting goals, managing teams, and ensuring alignment with the organization's objectives.
+junior-level positions: junior-level job title may include "junior", "staff", "intern", "graduate" 
+
+senior-level positions: senior-level job title may include "senior", "lead", "principal".   

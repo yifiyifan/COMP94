@@ -9,6 +9,7 @@ import pandas as pd
 from itertools import product
 import string
 import os
+import re
 
 # model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
@@ -22,36 +23,57 @@ def initialise_job_exp_grid(job_family_list:list, level_of_experience_list:list)
 
 def validate_output(answer:str, choices:dict|list):
     if isinstance(choices, list):
-        return answer.upper() in choices
+        return answer in choices
     else:
-        return answer.upper() in choices.keys()
-
-def query_flan_t5(
-    model:T5ForConditionalGeneration,
-    tokenizer:T5Tokenizer,
-    context:str,
-    question:str,
-    choices:dict | list = None, # mapping of options [A-Z]{1} -> some text
-    return_int:bool = False,
-    num_try:int=0,
-    max_try:int=3
-):
+        return answer in choices.keys()
     
+def clean_string(text):
+    # Define the regex pattern to match all characters except alphanumeric and regular punctuations
+    pattern = r'[^a-zA-Z0-9.,!?;:\'\"()\[\]{}<>@#$%^&*+=\-_~`\s]'
+    # Substitute all characters matching the pattern with an empty string
+    cleaned_text = re.sub(pattern, '', text)
+    return cleaned_text
+
+def build_input_text(
+    question:str,
+    context:str = None,
+    choices:dict | list = None, # mapping of options [A-Z]{1} -> some text
+):
+    output = f"question: {question}"
+
     if choices is not None:
+        print(choices)
         if isinstance(choices, list):
             choices_txt = ", ".join(choices)
         else:
             choices_txt = " ".join([
-                f"{key}) + {val}"
+                f"{key}) {val}"
                 for key, val in choices.items()
             ])
-        input_text = f"question: {question} choices: {choices_txt} context: {context}"
-    else:
-        input_text = f"question: {question} context: {context}"
-    inputs = tokenizer(input_text, return_tensors='pt')
+        output += f" choices: {choices_txt}"
+        # return f"question: {question} choices: {choices_txt} context: {context}"
+    if context is not None:
+        output += f" context: {context}"
+    
+    return output
+
+def query_flan_t5(
+    model:T5ForConditionalGeneration,
+    tokenizer:T5Tokenizer,
+    question:str,
+    context:str = None,
+    choices:dict | list = None, # mapping of options [A-Z]{1} -> some text
+    return_int:bool = False,
+    num_try:int=0,
+    max_try:int=3,
+    max_new_tokens:int=50
+):
+
+    input_text = build_input_text(question=question, context=context, choices=choices)
+    inputs = tokenizer(input_text, return_tensors='pt', max_length=512, truncation=True).to(model.device)
 
     # Generate the answer
-    outputs = model.generate(**inputs, max_new_tokens=50)
+    outputs = model.generate(**inputs, max_new_tokens=max_new_tokens)
     answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     if choices is not None:                     # if multiple choice
@@ -63,8 +85,12 @@ def query_flan_t5(
         else:
             if num_try < max_try:
                 conversion_question = f"Please choose a single letter to represent the context."
+                if isinstance(choices, list):
+                    conversion_choices = choices 
+                else:
+                    conversion_choices = list(choices.keys())
                 cleaned_answer:str = query_flan_t5(
-                    model, tokenizer, context=answer, question=conversion_question, choices=list(choices.keys()), return_int=True, num_try=num_try+1
+                    model, tokenizer, question=conversion_question, context=answer, choices=conversion_choices, return_int=False, num_try=num_try+1
                 )
                 if num_try == 0: # initial layer
                     return choices[cleaned_answer.upper()]
@@ -73,18 +99,50 @@ def query_flan_t5(
             else:
                 return None 
     else:
+        if answer.lower() == "not specified":
+            return None
         if return_int:
             try:
                 return str(int(answer))
             except:
                 if num_try < max_try:
-                    conversion_question = "Please return a single integer to represent this range"
+                    conversion_question = "Please return a single integer to represent the number range in context. If the context suggest it is not specified, say 'not specified'"
                     return query_flan_t5(
-                        model, tokenizer, context=answer, question=conversion_question, return_int=True, num_try=num_try+1
+                        model, tokenizer, question=conversion_question, context=answer, return_int=True, num_try=num_try+1
                     )
                 else:
                     return None
+        
         return answer                           # if not multiple choice, return the predicted value directly
+
+def chunk_context(question:str, context:str, overlap:int, tokenizer:T5Tokenizer, choices:dict|list=None, buffer:int=5) -> list:
+    input_template = build_input_text(question=question, context="placeholder", choices=choices)
+    tokens_excl_context = tokenizer.encode(input_template)
+    context_max_len = 512-len(tokens_excl_context)-buffer
+    
+    context_tokens = tokenizer.encode(context, add_special_tokens=False)
+    chunks = []
+    
+    start = 0
+    while start < len(context_tokens):
+        end = min(start + context_max_len, len(context_tokens))
+        chunk = context_tokens[start:end]
+        chunks.append(chunk)
+        if end == len(context_tokens):
+            break
+        start = end - overlap  # Create overlap
+    return [tokenizer.decode(c) for c in chunks]
+
+def summarize_chunk_answers(model:T5ForConditionalGeneration, tokenizer:T5Tokenizer,chunks:dict, aggregate:bool, question:str):
+    if aggregate:
+        # combine all answers to produce an answer
+        query = f"answer the question '{question}' by combining and summarizing the context"
+        return query_flan_t5(model, tokenizer, query, context=", ".join(chunks))
+    else:
+        # choose one that best 
+        query = f"answer the question '{question}' by choosing one of the choices"
+        return query_flan_t5(model, tokenizer, query, choices=chunks)
+ 
 
 def build_choices_dict(options_list:list[str], incl_others:bool=True):
     tmp_list = options_list.copy() # make a copy to not mess with the original list
@@ -104,7 +162,7 @@ def extract_job_title(
 
     q1_question = "What is the job family described in the job title and job description?"
     q1_choices = build_choices_dict(job_family_options)
-    q1_answer = query_flan_t5(model, tokenizer, job_post_text, q1_question, q1_choices)
+    q1_answer = query_flan_t5(model, tokenizer, q1_question, job_post_text, q1_choices)
 
     return q1_answer
 
@@ -116,18 +174,91 @@ def extract_job_attribute(
     tokenizer:T5Tokenizer,
 ):
     """return job family, level of experience, minimum years of experience"""
-    q2_question = "What is the minimum number of years of experience required in this job post answer as an integer?"
-    q2_answer = query_flan_t5(model, tokenizer, job_post_text, q2_question, return_int=True)
+    q2_question = "What is the minimum number of years of experience specified in the context as an integer? It is possible that the context did not mention a minimum years of experience."
+    q2_answer = query_flan_t5(model, tokenizer, q2_question, job_post_text, return_int=True)
 
-    q3_question = "What level of experience is indicated by the responsibility described in this job posting? if it cannot be inferred from the context, return -99."
-    q3_choices = build_choices_dict(level_of_experience_options)
-    definitions = open(os.path.join(os.getcwd(), *definitions_loc["experience_level"])).read() 
-    q3_answer = query_flan_t5(model, tokenizer, definitions+job_post_text, q3_question, q3_choices)
+    # q3_question = "What level of experience is indicated by the responsibility described in this job posting?"
+    # q3_choices = build_choices_dict(level_of_experience_options)
+    # definitions = open(os.path.join(os.getcwd(), *definitions_loc["experience_level"])).read() 
+    # q3_answer = query_flan_t5(model, tokenizer, definitions+" "+job_post_text, q3_question, q3_choices)
 
     q4_question = "What skills does the job applicant must have for this role? do not include qualification and years of experience."
-    q4_answer = query_flan_t5(model, tokenizer, job_post_text, q4_question)
+    q4_answer = query_flan_t5(model, tokenizer, q4_question, job_post_text)
 
-    return q2_answer, q3_answer, q4_answer
+    return q2_answer, q4_answer
 
 
 
+def extract_years_of_experience(
+    job_post_text:str,  
+    model:T5ForConditionalGeneration,
+    tokenizer:T5Tokenizer,
+    chunk_overlap:int=20,
+):
+    question = "What is the minimum number of years of experience specified in the context as an integer? It is possible that the context did not mention a minimum years of experience."
+    context_chunks = chunk_context(question, job_post_text, chunk_overlap, tokenizer)
+
+    chunk_answer = [query_flan_t5(model, tokenizer, question, c, return_int=True) for c in context_chunks]
+    chunk_answer = [a for a in chunk_answer if a is not None]
+
+    if len(chunk_answer) > 1:
+        summ_question = "Which choice has the smallest integer?"
+        choices_dict = build_choices_dict(chunk_answer, incl_others=False)
+        tmp_output = summarize_chunk_answers(model, tokenizer, choices_dict, aggregate=False, question=summ_question)
+    if len(chunk_answer) == 1:
+        tmp_output = chunk_answer[0]
+    else:
+        return None
+    
+    hallucination_check_q = "Does the context suggest applicant require at least {tmp_output} years of experience"
+
+    if hallucination_check(
+        job_post_text,
+        hallucination_check_q,
+        model,
+        tokenizer
+    ):
+        return tmp_output
+    else:
+        return None
+
+def extract_required_skills(
+    job_post_text:str,  
+    job_family:str,
+    model:T5ForConditionalGeneration,
+    tokenizer:T5Tokenizer,
+    chunk_overlap:int=20,    
+):
+    question = "What skills does the job applicant must have for this role? do not include qualification and years of experience."
+    context_chunks = chunk_context(question, job_post_text, chunk_overlap, tokenizer)
+
+    chunk_answer = [query_flan_t5(model, tokenizer, question, c, max_new_tokens=100) for c in context_chunks]
+    chunk_answer = [a for a in chunk_answer if a is not None]
+
+    if len(chunk_answer) > 1:
+        summ_question = f"Deduplicate and summarise the context to describe the skillsets required for a {job_family} role?"
+        choices_dict = build_choices_dict(chunk_answer, incl_others=False)
+        return summarize_chunk_answers(model, tokenizer, chunk_answer, aggregate=True, question=summ_question)
+    elif len(chunk_answer) == 1:
+        return chunk_answer[0]
+    else:
+        return None
+    
+def hallucination_check(
+    job_post_text:str,  
+    hallucination_check_q:str, # question that if any chunk responded ture, return true
+    model:T5ForConditionalGeneration,
+    tokenizer:T5Tokenizer,
+    chunk_overlap:int=20,
+) -> bool:
+    
+    context_chunks = chunk_context(hallucination_check_q, job_post_text, chunk_overlap, tokenizer)
+    choices = build_choices_dict(["True", "False"], incl_others=False) 
+    chunk_answer = [query_flan_t5(model, tokenizer, hallucination_check_q, c, choices) for c in context_chunks]
+    chunk_answer = [bool(a) for a in chunk_answer if a is not None]
+
+    if len(chunk_answer) > 0:
+        return any(chunk_answer)
+    else:
+        return False
+    
