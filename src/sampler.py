@@ -6,18 +6,9 @@
 from sentence_transformers import SentenceTransformer
 from transformers import T5Tokenizer, T5ForConditionalGeneration
 import pandas as pd
-from itertools import product
 import string
 
 # model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-
-def initialise_job_exp_grid(job_family_list:list, level_of_experience_list:list):
-    grid_lst = list(product(job_family_list, level_of_experience_list))
-    grid_df = pd.DataFrame(
-        data=grid_lst,
-        columns=["job_family","level_of_experience"]
-    )
-    return grid_df
 
 def validate_output(answer:str, choices:dict|list):
     if isinstance(choices, list):
@@ -196,15 +187,14 @@ def extract_required_skills(
     tokenizer:T5Tokenizer,
     chunk_overlap:int=20,    
 ):
-    question = "What skills and experience does the job applicant must have for this role?"
+    question = "What skills, experience and qualification does the job applicant must have for this role?"
     context_chunks = chunk_context(question, job_post_text, chunk_overlap, tokenizer)
 
     chunk_answer = [query_flan_t5(model, tokenizer, question, c, max_new_tokens=100) for c in context_chunks]
     chunk_answer = [a for a in chunk_answer if a is not None]
 
     if len(chunk_answer) > 1:
-        summ_question = f"Deduplicate and summarise the context to describe the skillsets required for a {job_family} role?"
-        choices_dict = build_choices_dict(chunk_answer, incl_others=False)
+        summ_question = f"Deduplicate and summarise the context to describe the skills, experience and qualification required for a {job_family} role?"
         return summarize_chunk_answers(model, tokenizer, chunk_answer, aggregate=True, question=summ_question)
     elif len(chunk_answer) == 1:
         return chunk_answer[0]

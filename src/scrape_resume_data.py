@@ -19,47 +19,49 @@ pattern = re.compile(r'^SECTION_(SUMM|HILT|EDUC|EXPR|SKLL).+$')
 def id(x):
     return int(hashlib.md5(x.encode('utf-8')).hexdigest(), 16)
 
-# Set the path to the Edge binary (optional)
-edge_options = Options()
-# edge_options.binary_location = "C:/Path/To/Your/Edge/Application/msedge.exe"  # Uncomment and set the path if needed
+def set_up_driver(headless:bool=False) -> webdriver.Edge:
+    edge_options = Options()
+    if headless:
+        edge_options.add_argument("--headless")  
+        edge_options.add_argument("--disable-gpu")  
+        edge_options.add_argument("--window-size=1920x1080") 
+    service = Service(EdgeChromiumDriverManager().install())
+    driver = webdriver.Edge(service=service, options=edge_options)
+    return driver 
 
-# Use EdgeDriverManager to install the appropriate driver
-service = Service(EdgeChromiumDriverManager().install())
-driver = webdriver.Edge(service=service, options=edge_options)
+# job_list = [
+#     'accountant', 
+#     'chef', 
+#     'data analyst', 
+#     'software engineer', 
+#     'vet',
+#     'salesperson',
+# ]
+# MAX_PAGE = 2
 
-job_list = [
-    'accountant', 
-    'chef', 
-    'data analyst', 
-    'software engineer', 
-    'vet',
-    'salesperson',
-]
-MAX_PAGE = 2
+# df = pd.DataFrame()
+# category = []
+# link = []
+# job_title=[]
+# years_of_experience = []
+# resume_text = []
 
-df = pd.DataFrame()
-category = []
-link = []
-job_title=[]
-years_of_experience = []
-resume_text = []
+# for job in job_list:
+#     JOB = job.lower().replace(" ","%20")
+#     for i in range(MAX_PAGE):   # INCREASE THE RANGE TO GET MORE RESUME DATA
+#         PAGE = str(i+1)
+#         URL = "https://www.livecareer.com/resume-search/search?jt=" + JOB + "&bg=85&eg=100&comp=&mod=&pg=" + PAGE
+#         driver.get(URL)
+#         a_tags_in_div = driver.find_elements(By.CSS_SELECTOR, 'div a')
 
-for job in job_list:
-    JOB = job.lower().replace(" ","%20")
-    for i in range(MAX_PAGE):   # INCREASE THE RANGE TO GET MORE RESUME DATA
-        PAGE = str(i+1)
-        URL = "https://www.livecareer.com/resume-search/search?jt=" + JOB + "&bg=85&eg=100&comp=&mod=&pg=" + PAGE
-        driver.get(URL)
-        a_tags_in_div = driver.find_elements(By.CSS_SELECTOR, 'div a')
+#         for a in a_tags_in_div:
+#             if a.get_attribute('class') == "sc-1dzblrg-0 caJIKu sc-1os65za-2 jhoVRR":
+#                 category.append(job)
+#                 link.append(a.get_attribute('href'))
 
-        for a in a_tags_in_div:
-            if a.get_attribute('class') == "sc-1dzblrg-0 caJIKu sc-1os65za-2 jhoVRR":
-                category.append(job)
-                link.append(a.get_attribute('href'))
-
-df["Category"] = category
-df["link"] = link
-df["id"] = df["link"].apply(id)
+# df["Category"] = category
+# df["link"] = link
+# df["id"] = df["link"].apply(id)
 
 def scrape_resume_link(driver:webdriver.Edge, job_family:str, exp_level:str, min_rating:int=85, max_rating:int=100, max_page:int=5):
     """Return a list of resume links matching the search criteria"""
@@ -94,22 +96,22 @@ def get_resume_info(driver:webdriver.Edge, link:str):
     finally:
         return tmp_job_title, tmp_resume, tmp_years
 
-for l in df['link']:
-    try:        
-        title, resume, num_years = get_resume_info(driver, l)
-    except Exception:
-        pass
-    finally:
-        job_title.append(title)
-        resume_text.append(resume)
-        years_of_experience.append(num_years)
+# for l in df['link']:
+#     try:        
+#         title, resume, num_years = get_resume_info(driver, l)
+#     except Exception:
+#         pass
+#     finally:
+#         job_title.append(title)
+#         resume_text.append(resume)
+#         years_of_experience.append(num_years)
 
-df['job_title'] = job_title
-df['resume_text'] = resume_text
-df['years_of_experience'] = years_of_experience
+# df['job_title'] = job_title
+# df['resume_text'] = resume_text
+# df['years_of_experience'] = years_of_experience
 
-print(f"scraped {df.shape[0]} resume")
+# print(f"scraped {df.shape[0]} resume")
 
-df.to_csv("result.csv", index=False)
+# df.to_csv("result.csv", index=False)
 
 

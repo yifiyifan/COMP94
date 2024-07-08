@@ -77,6 +77,8 @@ def extract_job_post_info(
                     extracted_info.append((id, title, clean_desc, job_fam, years, skill))
                 else:
                     extracted_info.append((id, title, clean_desc, None, None, None))
+            except KeyboardInterrupt as e:
+                raise e
             except:
                 pass # skip this job post if encountered error
     
