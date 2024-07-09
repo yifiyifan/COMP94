@@ -5,26 +5,19 @@
 
 # modules in project
 import logging.config
-from src.sampler import (
-    extract_job_title,
-    extract_required_skills,
-    extract_years_of_experience,
-)
+
 from src.scrape_resume_data import (
     set_up_driver,
     scrape_resume_link,
     get_resume_info
 )
 from src.utils import (
-    clean_string,
     format_execution_time,
     initialise_job_exp_grid
 )
 from src.configs import (
     CONFIG,
     LOGGING_CONFIG,
-    JOB_POSTING_PATH,
-    FLAN_T5_MODEL_NAME, # probably not needed ?
 )
 
 # import required libraries 
@@ -32,30 +25,9 @@ import os
 import pandas as pd
 from tqdm import tqdm
 from datetime import datetime
-import torch
 import logging
-from transformers import T5Tokenizer, T5ForConditionalGeneration
 import time
-
-from selenium import webdriver
-from selenium.webdriver.edge.service import Service
-from selenium.webdriver.edge.options import Options
-from selenium.webdriver.common.by import By
-import json
-from selenium_stealth import stealth
-
-from webdriver_manager.microsoft import EdgeChromiumDriverManager
 import pandas as pd
-import numpy as np
-from bs4 import BeautifulSoup
-import bs4
-import requests
-import re
-import hashlib
-import random
-pattern_job_title = r'.+(?=\sresume example with)'
-pattern_num_year = r'(?<=resume example with\s)[0-9]+'
-pattern = re.compile(r'^SECTION_(SUMM|HILT|EDUC|EXPR|SKLL).+$')
 
 
 logging.config.dictConfig(LOGGING_CONFIG)
@@ -83,10 +55,6 @@ def scrape_resume():
             max_page=CONFIG['resume_scraping_params']['pages_per_search']
         )
         links.append("|".join(tmp_list))
-        # # randomly restart driver
-        # if random.uniform(0,1) < restart_driver_prob:
-        #     driver.close()
-        #     driver = set_up_driver()
     
     links_df = grid.copy()
     links_df["links"] = links
