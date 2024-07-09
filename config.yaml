@@ -1,7 +1,23 @@
-job_family: [
+job_family: &job_fam [
   "accountant", 
   "data analyst", 
   "data engineer", 
   "electrical engineer",
   "software enigneer", 
 ]
+resume_scraping_params: 
+  job_family: *job_fam
+  experience_band:
+    1: 
+      start: 0
+      end: 4
+    2: 
+      start: 5
+      end: 9
+    3: 
+      start: 10
+      end: 14
+    4: 
+      start: 15
+      end: 25
+  pages_per_search: 4
