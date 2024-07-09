@@ -5,11 +5,7 @@ from selenium.webdriver.common.by import By
 from fake_useragent import UserAgent
 
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
-import pandas as pd
-import numpy as np
 from bs4 import BeautifulSoup
-import bs4
-import requests
 import re
 import hashlib
 import time
@@ -34,40 +30,6 @@ def set_up_driver(headless:bool=False) -> webdriver.Edge:
     service = Service(EdgeChromiumDriverManager().install())
     driver = webdriver.Edge(service=service, options=edge_options)
     return driver 
-
-# job_list = [
-#     'accountant', 
-#     'chef', 
-#     'data analyst', 
-#     'software engineer', 
-#     'vet',
-#     'salesperson',
-# ]
-# MAX_PAGE = 2
-
-# df = pd.DataFrame()
-# category = []
-# link = []
-# job_title=[]
-# years_of_experience = []
-# resume_text = []
-
-# for job in job_list:
-#     JOB = job.lower().replace(" ","%20")
-#     for i in range(MAX_PAGE):   # INCREASE THE RANGE TO GET MORE RESUME DATA
-#         PAGE = str(i+1)
-#         URL = "https://www.livecareer.com/resume-search/search?jt=" + JOB + "&bg=85&eg=100&comp=&mod=&pg=" + PAGE
-#         driver.get(URL)
-#         a_tags_in_div = driver.find_elements(By.CSS_SELECTOR, 'div a')
-
-#         for a in a_tags_in_div:
-#             if a.get_attribute('class') == "sc-1dzblrg-0 caJIKu sc-1os65za-2 jhoVRR":
-#                 category.append(job)
-#                 link.append(a.get_attribute('href'))
-
-# df["Category"] = category
-# df["link"] = link
-# df["id"] = df["link"].apply(id)
 
 def scrape_resume_link(
     job_family:str, 
@@ -116,24 +78,3 @@ def get_resume_info(driver:webdriver.Edge, link:str):
         return tmp_job_title, tmp_resume, tmp_years, tmp_skill_exp
     except Exception as e:
         return None, None, None, None
-        
-
-# for l in df['link']:
-#     try:        
-#         title, resume, num_years = get_resume_info(driver, l)
-#     except Exception:
-#         pass
-#     finally:
-#         job_title.append(title)
-#         resume_text.append(resume)
-#         years_of_experience.append(num_years)
-
-# df['job_title'] = job_title
-# df['resume_text'] = resume_text
-# df['years_of_experience'] = years_of_experience
-
-# print(f"scraped {df.shape[0]} resume")
-
-# df.to_csv("result.csv", index=False)
-
-

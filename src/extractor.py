@@ -3,12 +3,8 @@
     2. Use sentence encoder to find top x job posting by title
 """
 
-from sentence_transformers import SentenceTransformer
 from transformers import T5Tokenizer, T5ForConditionalGeneration
-import pandas as pd
 import string
-
-# model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 def validate_output(answer:str, choices:dict|list):
     if isinstance(choices, list):

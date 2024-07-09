@@ -5,7 +5,7 @@
 
 # modules in project
 import logging.config
-from src.sampler import (
+from src.extractor import (
     extract_job_title,
     extract_required_skills,
     extract_years_of_experience,

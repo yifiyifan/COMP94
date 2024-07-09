@@ -1,12 +1,6 @@
-# from src.scrap_data import (
-#     scrape_resume_link,
-#     get_resume_info,
-# )
-
-# modules in project
 import logging.config
 
-from src.scrape_resume_data import (
+from src.scraper import (
     set_up_driver,
     scrape_resume_link,
     get_resume_info
