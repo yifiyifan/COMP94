@@ -1,133 +1,156 @@
-"""
-    1. Solution to build job family * level of experience grid 
-    2. Use sentence encoder to find top x job posting by title
-"""
-
-from sentence_transformers import SentenceTransformer
-from transformers import T5Tokenizer, T5ForConditionalGeneration
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
-from itertools import product
-import string
 import os
+from dataclasses import dataclass
+import random
+import torch
+from transformers import T5Tokenizer, T5ForConditionalGeneration
+from tqdm import tqdm
 
-# model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+from src.configs import (
+    CONFIG,
+    LOGGING_CONFIG,
+    FLAN_T5_MODEL_NAME,
+)
 
-def initialise_job_exp_grid(job_family_list:list, level_of_experience_list:list):
-    grid_lst = list(product(job_family_list, level_of_experience_list))
-    grid_df = pd.DataFrame(
-        data=grid_lst,
-        columns=["job_family","level_of_experience"]
-    )
-    return grid_df
+from src.extractor import (
+    extract_stated_skills
+)
 
-def validate_output(answer:str, choices:dict|list):
-    if isinstance(choices, list):
-        return answer.upper() in choices
-    else:
-        return answer.upper() in choices.keys()
+def clean_df(input_df:pd.DataFrame, job_fam_col:str, target_col:str, similarity_threshold:float=0.99):
+    # remove failed scrape 
+    output_df = input_df.dropna(how="any")
 
-def query_flan_t5(
-    model:T5ForConditionalGeneration,
-    tokenizer:T5Tokenizer,
-    context:str,
-    question:str,
-    choices:dict | list = None, # mapping of options [A-Z]{1} -> some text
-    return_int:bool = False,
-    num_try:int=0,
-    max_try:int=3
-):
+    # remove deduplicate 
+    output_df = output_df.drop_duplicates()
     
-    if choices is not None:
-        if isinstance(choices, list):
-            choices_txt = ", ".join(choices)
-        else:
-            choices_txt = " ".join([
-                f"{key}) + {val}"
-                for key, val in choices.items()
-            ])
-        input_text = f"question: {question} choices: {choices_txt} context: {context}"
-    else:
-        input_text = f"question: {question} context: {context}"
-    inputs = tokenizer(input_text, return_tensors='pt')
+    # remove over similar examples 
+    kept_dfs = []
+    for job_fam in CONFIG["job_family"]:
+        subset:pd.DataFrame = output_df[output_df[job_fam_col]==job_fam]
+        # subset["orig_index"]=subset.index
+        subset.reset_index(drop=True)
+        documents = subset[target_col]
+        
+        vectorizer = TfidfVectorizer()
+        tfidf_matrix = vectorizer.fit_transform(documents)
+        cosine_sim_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix)
+        
+        id_to_keep = []
+        duplicate_flags = np.zeros(len(documents))
 
-    # Generate the answer
-    outputs = model.generate(**inputs, max_new_tokens=50)
-    answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        for i in range(len(documents)):
+            if duplicate_flags[i] == 0:
+                # Mark this document as a keeper
+                id_to_keep.append(i)
+                # Compare this document with all subsequent documents
+                for j in range(i + 1, len(documents)):
+                    if cosine_sim_matrix[i][j] >= similarity_threshold:
+                        # Mark this document as a duplicate
+                        duplicate_flags[j] = 1
 
-    if choices is not None:                     # if multiple choice
-        if validate_output(answer, choices): 
-            if isinstance(choices, list):
-                return answer.upper()
-            else:  
-                return choices[answer.upper()]      # return the value of predicted option (expect flan-t5 to predict just A for option A)
+        retained_rows = subset.iloc[id_to_keep]
+        kept_dfs.append(retained_rows)
+    output_df = pd.concat(kept_dfs, axis=0).reset_index(drop=True)
+    return output_df
+
+def tfidf_sim(x, y):
+    documents = [str(x),str(y)]
+    vectorizer = TfidfVectorizer()
+    tfidf_matrix = vectorizer.fit_transform(documents)
+    cosine_sim_score = cosine_similarity(tfidf_matrix, tfidf_matrix)[0,1]
+    return cosine_sim_score
+
+@dataclass
+class ResumeSampler():
+
+    # job_title, job_desc, min_years, requirement, max_year
+    job_post:pd.DataFrame
+    # job_family, resume, years_of_experience, skills_experience
+    resume_df:pd.DataFrame
+
+    def cross_join(self):
+        output = self.job_post.join(
+            other= self.resume_df,
+            how="cross"
+        )
+        return output
+    
+    def mistmached_job_fam(self, sample_n=2000):
+        df = self.cross_join()
+        df_all_mismatch = df[df["advertised_job_fam"]!=df["job_family"]]
+        if df_all_mismatch.shape[0] > sample_n:
+            return df_all_mismatch.sample(n=sample_n)
         else:
-            if num_try < max_try:
-                conversion_question = f"Please choose a single letter to represent the context."
-                cleaned_answer:str = query_flan_t5(
-                    model, tokenizer, context=answer, question=conversion_question, choices=list(choices.keys()), return_int=True, num_try=num_try+1
-                )
-                if num_try == 0: # initial layer
-                    return choices[cleaned_answer.upper()]
-                else:
-                    return cleaned_answer.upper()
-            else:
-                return None 
-    else:
-        if return_int:
-            try:
-                return str(int(answer))
-            except:
-                if num_try < max_try:
-                    conversion_question = "Please return a single integer to represent this range"
-                    return query_flan_t5(
-                        model, tokenizer, context=answer, question=conversion_question, return_int=True, num_try=num_try+1
+            return df_all_mismatch
+    
+    def mistmatched_years_of_experience(self, sample_n=2000):
+        df = self.cross_join()
+        df = df[df["advertised_job_fam"]==df["job_family"]]
+        underqualify = list(df["years_of_experience"]<df["min_years"])
+        overqualify = list(df["years_of_experience"]>df["max_years"])
+        index_not_meet_criteria = (underqualify) or (overqualify)
+        df_all_mismatch = df[index_not_meet_criteria]
+        if df_all_mismatch.shape[0] > sample_n:
+            return df_all_mismatch.sample(n=sample_n)
+        else:
+            return df_all_mismatch
+    
+    def good_and_potential_match(self, sample_n_pot=2000, sample_n_good=2000):
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        tokenizer = T5Tokenizer.from_pretrained(FLAN_T5_MODEL_NAME)
+        model = T5ForConditionalGeneration.from_pretrained(FLAN_T5_MODEL_NAME).to(device)
+
+        df = self.cross_join()
+        return_cols = df.columns.to_list()
+        df = df[df["advertised_job_fam"]==df["job_family"]]
+        underqualify = list(df["years_of_experience"]<df["min_years"])
+        overqualify = list(df["years_of_experience"]>df["max_years"])
+        meet_criteria = [not (u or o) for u, o in zip(underqualify, overqualify)]
+        df_all_match = df[meet_criteria]
+
+        subset_list = []
+
+        for job_fam in tqdm(CONFIG["job_family"], desc="Sampling by job family", ncols=100, total=len(CONFIG["job_family"])):
+            subset:pd.DataFrame = df_all_match[df_all_match["job_family"]==job_fam].reset_index(drop=True)
+            # tmp_sum_col = []
+            tmp_sim_col = []
+            for i in tqdm(range(subset.shape[0]), desc="processing", ncols=100, total=subset.shape[0]):
+                try: 
+                    sim_score = extract_stated_skills(
+                        str(subset["requirement"][i]),
+                        str(subset["skills_experience"][i]),
+                        model,
+                        tokenizer
                     )
-                else:
-                    return None
-        return answer                           # if not multiple choice, return the predicted value directly
+                    # sim_score = tfidf_sim(summ_skill, subset["requirement"][i])
+                    # tmp_sum_col.append(summ_skill)
+                    tmp_sim_col.append(sim_score)
+                except Exception as e:
+                    print(e)
+                    # tmp_sum_col.append(None)
+                    tmp_sim_col.append(None)
+            # subset["summ_skills"] = tmp_sum_col
+            subset["similarity"] = tmp_sim_col
+            subset_list.append(subset.copy())
 
-def build_choices_dict(options_list:list[str], incl_others:bool=True):
-    tmp_list = options_list.copy() # make a copy to not mess with the original list
-    if incl_others:
-        tmp_list.append("none of the above")
-    num_options = len(tmp_list)
-    return {key:val for key, val in zip(string.ascii_uppercase[0:num_options], tmp_list)}
+        output_df = pd.concat(subset_list, axis=0).reset_index(drop=True)
 
+        output_df.to_csv(os.path.join("data", "resume_similarity.csv"), index=False)
 
-def extract_job_title(
-    job_post_text:str, 
-    job_family_options:list[str], 
-    model:T5ForConditionalGeneration,
-    tokenizer:T5Tokenizer,
-):
-    """return job family, level of experience, minimum years of experience"""
+        good_match_mask = output_df["similarity"].apply(lambda x: x =="4 - met all requirements")
+        requirement_len_mask = output_df["requirement"].apply(func=lambda x: len(x) >= 200) # some short descriptions are just not informative
+        overall_mask = good_match_mask & requirement_len_mask
 
-    q1_question = "What is the job family described in the job title and job description?"
-    q1_choices = build_choices_dict(job_family_options)
-    q1_answer = query_flan_t5(model, tokenizer, job_post_text, q1_question, q1_choices)
+        good_match_df = output_df[overall_mask]
+        potential_match_df = output_df[~overall_mask]
 
-    return q1_answer
-
-def extract_job_attribute(
-    job_post_text:str,  
-    level_of_experience_options:list[str],
-    definitions_loc:dict,
-    model:T5ForConditionalGeneration,
-    tokenizer:T5Tokenizer,
-):
-    """return job family, level of experience, minimum years of experience"""
-    q2_question = "What is the minimum number of years of experience required in this job post answer as an integer?"
-    q2_answer = query_flan_t5(model, tokenizer, job_post_text, q2_question, return_int=True)
-
-    q3_question = "What level of experience is indicated by the responsibility described in this job posting? if it cannot be inferred from the context, return -99."
-    q3_choices = build_choices_dict(level_of_experience_options)
-    definitions = open(os.path.join(os.getcwd(), *definitions_loc["experience_level"])).read() 
-    q3_answer = query_flan_t5(model, tokenizer, definitions+job_post_text, q3_question, q3_choices)
-
-    q4_question = "What skills does the job applicant must have for this role? do not include qualification and years of experience."
-    q4_answer = query_flan_t5(model, tokenizer, job_post_text, q4_question)
-
-    return q2_answer, q3_answer, q4_answer
-
-
-
+        if good_match_df.shape[0] > sample_n_good:
+            good_match_df = good_match_df.sample(n=sample_n_good)
+        if potential_match_df.shape[0] > sample_n_pot:
+            potential_match_df = potential_match_df.sample(n=sample_n_pot)
+        
+        return good_match_df[return_cols], potential_match_df[return_cols]

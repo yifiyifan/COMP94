@@ -4,5 +4,9 @@ selenium
 numpy
 requests
 webdriver-manager
+torch --index-url https://download.pytorch.org/whl/cu121
+transformers[torch]
 sentence-transformers
 sentencepiece
+scikit-learn
+fake-useragent
