@@ -118,7 +118,7 @@ def summarize_chunk_answers(model:T5ForConditionalGeneration, tokenizer:T5Tokeni
     else:
         # choose one that best 
         query = f"answer the question '{question}' by choosing one of the choices"
-        return query_flan_t5(model, tokenizer, query, choices=chunks)
+        return query_flan_t5(model, tokenizer, query, choices=build_choices_dict(chunks,incl_others=False))
  
 
 def build_choices_dict(options_list:list[str], incl_others:bool=True):
@@ -196,6 +196,30 @@ def extract_required_skills(
         return chunk_answer[0]
     else:
         return None
+    
+def extract_stated_skills(
+    requirement_text:str,
+    skills_text:str,  
+    model:T5ForConditionalGeneration,
+    tokenizer:T5Tokenizer,
+    chunk_overlap:int=20,    
+):
+    question = f"How well does the skills and experience of job applicant in context meet the requirement of '{requirement_text}'? Choose from the choices provided?"
+    choices_list = ["1 - met none of the requirements", "2 - met minority of requirements ", "3 - met majority of requirements", "4 - met all requirements"]
+    choices = build_choices_dict(choices_list, False)
+    context_chunks = chunk_context(question, skills_text, chunk_overlap, tokenizer, choices)
+
+    chunk_answer = [query_flan_t5(model, tokenizer, question, c, choices, max_new_tokens=10) for c in context_chunks]
+    chunk_answer = [a for a in chunk_answer if a is not None]
+
+    if len(chunk_answer) > 1:
+        summ_question = f"Choose the most popular answer if they are different."
+        return summarize_chunk_answers(model, tokenizer, chunk_answer, aggregate=False, question=summ_question)
+    elif len(chunk_answer) == 1:
+        return chunk_answer[0]
+    else:
+        return None
+
     
 def hallucination_check(
     job_post_text:str,  
