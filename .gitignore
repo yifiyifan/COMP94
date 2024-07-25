@@ -3,3 +3,4 @@
 **/*.xlsx
 logs/**
 **/*.zip
+.env
