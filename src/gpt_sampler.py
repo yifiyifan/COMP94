@@ -42,19 +42,36 @@ RESUME_SKILLS_USER_INPUT_TEMPLATE = (
 
 RETURN_FORMAT_ASSISTANT_MESSAGE = (
     "Return the next assistant message in JSON format with three key-value pairs"
-    "\nFirst item is the answer and its value is a string representing whether the resume is a good fit, the accepted values are 'no fit', 'potential fit', 'good fit'"
-    "\nSecond item is the justification for previous item, and its value is a free text string with up to 50 tokens"
+    "\nFirst item is the answer and its value is a string representing whether the resume is a good fit, the accepted values are 'poor fit', 'potential fit', 'good fit'"
+    "\nSecond item is the justification for previous item, and its value is a free text string with up to 100 tokens"
     "\nThird item is the confidence score, and its value is a float between 0 and 1"
-    '\n\nExample:\n{"answer":"potential fit","justification":"reason why the resume is a potential fit", "confidence":0.5}'
+    '\n\nExample:\n{"answer":"potential fit","justification":"This candidate meets some requirement of the role but has noticeable gap that needs to be closed to be a strong candidate", "confidence":0.5}'
 )
 
 FIT_ASSESSMENT_USER_MESSAGE = (
     "Definitions:"
-    "\ngood fit means the resume of the candidate meets vast majority of the requirements stated in the job description, and can be expected to perform well in the role"
-    "\npotential fit means the resume of the candidate meets about half of the requirements stated in the job description, and has the potential to close the gap without significant barrier"
-    "\nno fit means the resume of the candidate meets none to few of the requirements state in the job description, significant amount of effort will be required for the candidate to close the gap"
+    "\n\npoor fit:"
+    "\nA candidate in this category lacks multiple technical skills required for the role." 
+    "Their resume shows very little or no relevant experience in the necessary technical areas, "
+    "and they also demonstrate limited proficiency in non-technical skills. "
+    "Significant gaps in key areas indicate that they would require extensive training and development to reach the expected competency level for the role. "
+    "These candidates are not suitable for the position at this time."
+    "\n\npotential fit:"
+    "\nCandidates in the potential fit category meet majority of the mandatory technical skills but have some gaps in requirement areas. "
+    "While they show some relevant experience and proficiency in both technical and non-technical skills, "
+    "these are limited and not deeply aligned with the specific role requirements. "
+    "They may lack some preferred qualifications. "
+    "With further evaluation and potential development, they could become strong contributors to the team."
+    "\n\ngood Fit:"
+    "\nCandidates classified as a good fit meet majority or all of the mandatory technical skills and some or most of the preferred qualifications. "
+    "Minor gaps in technical skills are acceptable. "
+    "They demonstrate relevant experience and proficiency in both technical and non-technical skills, "
+    "with clear evidence of successful project involvement or contributions. "
+    "These candidates have extensive relevant experience, "
+    "showing clear potential for immediate contribution to the role. "
+    "They are considered strong contenders for the position and are suitable for moving forward in the interview process."
     "\n\nInstructions: "
-    "\nBased on the skills in the resume and the skills specified in the job description, assess if this candidate is a good fit for the role."
+    "\nAssess if this candidate is a good fit for the role based on the discussion above."
     "Please provided answer for goodness of fit, justification and confidence score for your answer in JSON format described in the last assistant message."
 )
 
@@ -86,7 +103,7 @@ def check_output_is_json(output_str:str):
 
 def check_answer_item(output_dict:Dict):
     if "answer" in output_dict.keys():
-        if str(output_dict["answer"]).lower() in ["no fit", "potential fit", "good fit"]:
+        if str(output_dict["answer"]).lower() in ["poor fit", "potential fit", "good fit"]:
             return True
         else:
             return False
@@ -196,7 +213,7 @@ def clean_response(open_ai_client:OpenAI, proposed_response:str, attempts:int=1)
     
     MAX_ATTEMPTS = 3 
     if attempts > MAX_ATTEMPTS:
-        return {"answer":None, "justification":None, "confidence":None}
+        return {"answer":None, "justification":None, "confidence":0}
     
     model = "gpt-4o-mini"
     messages = [
