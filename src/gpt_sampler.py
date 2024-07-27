@@ -40,40 +40,80 @@ RESUME_SKILLS_USER_INPUT_TEMPLATE = (
     "Return output as a paragraph"
 )
 
+# RETURN_FORMAT_ASSISTANT_MESSAGE = (
+#     "Return the next assistant message in JSON format with three key-value pairs"
+#     "\nFirst item is the answer and its value is a string representing whether the resume is a good fit, the accepted values are 'poor fit', 'potential fit', 'good fit'"
+#     "\nSecond item is the justification for previous item, and its value is a free text string with up to 100 tokens"
+#     "\nThird item is the confidence score, and its value is a float between 0 and 1"
+#     '\n\nExample:\n{"answer":"potential fit","justification":"This candidate meets some requirement of the role but has noticeable gap that needs to be closed to be a strong candidate", "confidence":0.5}'
+# )
+
+# FIT_ASSESSMENT_USER_MESSAGE = (
+#     "Definitions:"
+#     "\n\npoor fit:"
+#     "\nA candidate in this category lacks more than one mandatory requirements for the role " 
+#     "and / or they also demonstrate limited relevant experience to the role. "
+#     "Significant gaps in key areas indicate that they would require extensive training and development to reach the expected competency level for the role. "
+#     "These candidates are not suitable for the position at this time."
+#     "\n\npotential fit:"
+#     "\nCandidates in the potential fit category meet majority of the mandatory technical skills but have some gaps in either mandatory or preferred requirements. "
+#     "While they show some relevant experience and proficiency in both technical and non-technical skills, "
+#     "these are limited and not deeply aligned with the specific role requirements. "
+#     "They may lack some preferred qualifications. "
+#     "With further evaluation and potential development, they could become strong contributors to the team."
+#     "\n\ngood Fit:"
+#     "\nCandidates classified as a good fit if they meet most or all of the mandatory technical skills. "
+#     "Meeting some of the preferred requirements should increase the chance that the candidate is a good fit"
+#     "Minor gaps in technical skills are acceptable. "
+#     "They demonstrate relevant experience and proficiency in both technical and non-technical skills, "
+#     "with clear evidence of successful project involvement or contributions. "
+#     "These candidates have extensive relevant experience, "
+#     "showing clear potential for immediate contribution to the role. "
+#     "They are considered strong contenders for the position and are suitable for moving forward in the interview process."
+#     # "\n\nHow to distinguish between poor fit, potential fit and good fit:"
+#     # "\nIf there are clear indication of good fit. such that we can comfortably proceed this candidate to the next round of interview, prefer good fit over potential fit."
+#     # "\nIf there are clear red flags about the candidate, prefer poor fit over potential fit"
+#     # "\nReserve potential fit for candidates that you may put on the shortlist"
+#     "\n\nPrefer good fit or poor fit over potential fit, reserve potential fit for candidate that you would shortlist but not proceed to next round of interview."
+#     "\n\nInstructions: "
+#     "\nAssess if this candidate is a good fit for the role based on the discussion above."
+#     "Please provided answer for goodness of fit, justification and confidence score for your answer in JSON format described in the last assistant message."
+# )
+
 RETURN_FORMAT_ASSISTANT_MESSAGE = (
     "Return the next assistant message in JSON format with three key-value pairs"
-    "\nFirst item is the answer and its value is a string representing whether the resume is a good fit, the accepted values are 'poor fit', 'potential fit', 'good fit'"
+    "\nFirst item is the answer and its value is a string representing whether the resume is a good fit, the accepted values are 'poor fit', 'good fit'"
     "\nSecond item is the justification for previous item, and its value is a free text string with up to 100 tokens"
     "\nThird item is the confidence score, and its value is a float between 0 and 1"
-    '\n\nExample:\n{"answer":"potential fit","justification":"This candidate meets some requirement of the role but has noticeable gap that needs to be closed to be a strong candidate", "confidence":0.5}'
+    '\n\nExample:\n{"answer":"good fit","justification":"This candidate meets some requirement of the role but has noticeable gap that needs to be closed to be a strong candidate", "confidence":0.5}'
 )
 
 FIT_ASSESSMENT_USER_MESSAGE = (
     "Definitions:"
     "\n\npoor fit:"
-    "\nA candidate in this category lacks multiple technical skills required for the role." 
-    "Their resume shows very little or no relevant experience in the necessary technical areas, "
-    "and they also demonstrate limited proficiency in non-technical skills. "
+    "\nA candidate in this category lacks multiple mandatory requirements for the role " 
+    "and / or they also demonstrate limited relevant experience to the role. "
     "Significant gaps in key areas indicate that they would require extensive training and development to reach the expected competency level for the role. "
     "These candidates are not suitable for the position at this time."
-    "\n\npotential fit:"
-    "\nCandidates in the potential fit category meet majority of the mandatory technical skills but have some gaps in requirement areas. "
-    "While they show some relevant experience and proficiency in both technical and non-technical skills, "
-    "these are limited and not deeply aligned with the specific role requirements. "
-    "They may lack some preferred qualifications. "
-    "With further evaluation and potential development, they could become strong contributors to the team."
     "\n\ngood Fit:"
-    "\nCandidates classified as a good fit meet majority or all of the mandatory technical skills and some or most of the preferred qualifications. "
+    "\nCandidates classified as a good fit if they meet most or all of the mandatory technical skills. "
+    "Meeting some of the preferred requirements should increase the chance that the candidate is a good fit"
     "Minor gaps in technical skills are acceptable. "
     "They demonstrate relevant experience and proficiency in both technical and non-technical skills, "
     "with clear evidence of successful project involvement or contributions. "
     "These candidates have extensive relevant experience, "
     "showing clear potential for immediate contribution to the role. "
     "They are considered strong contenders for the position and are suitable for moving forward in the interview process."
+    # "\n\nHow to distinguish between poor fit, potential fit and good fit:"
+    # "\nIf there are clear indication of good fit. such that we can comfortably proceed this candidate to the next round of interview, prefer good fit over potential fit."
+    # "\nIf there are clear red flags about the candidate, prefer poor fit over potential fit"
+    # "\nReserve potential fit for candidates that you may put on the shortlist"
+    # "\n\nPrefer good fit or poor fit over potential fit, reserve potential fit for candidate that you would shortlist but not proceed to next round of interview."
     "\n\nInstructions: "
     "\nAssess if this candidate is a good fit for the role based on the discussion above."
     "Please provided answer for goodness of fit, justification and confidence score for your answer in JSON format described in the last assistant message."
 )
+
 
 RESPONSE_CLEAN_USER_MESSAGE = (
     "The string to be cleaned is:",
@@ -103,7 +143,9 @@ def check_output_is_json(output_str:str):
 
 def check_answer_item(output_dict:Dict):
     if "answer" in output_dict.keys():
-        if str(output_dict["answer"]).lower() in ["poor fit", "potential fit", "good fit"]:
+        # if str(output_dict["answer"]).lower() in ["poor fit", "potential fit", "good fit"]:
+        if str(output_dict["answer"]).lower() in ["poor fit", "good fit"]:
+
             return True
         else:
             return False

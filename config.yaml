@@ -3,7 +3,7 @@ job_family: &job_fam [
   "data analyst", 
   "data engineer", 
   "electrical engineer",
-  "software enigneer", 
+  "software engineer", 
 ]
 resume_scraping_params: 
   job_family: *job_fam
