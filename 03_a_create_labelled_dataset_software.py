@@ -9,23 +9,16 @@ from src.sampler import clean_df
 if __name__ == "__main__":
 
 
-    resume_df = pd.read_csv(os.path.join("data", "resume_data_20240709115020.csv"))[["job_family", "resume", "years_of_experience", "skills_experience"]]
-    # filter down to smaller subset
-    # resume_df = resume_df[resume_df["years_of_experience"]==5]
-    resume_df.dropna()
+    # resume_df = pd.read_csv(os.path.join("data", "example_input", "resume-40-data-creation-examples.csv"))[["job_family", "resume", "years_of_experience", "skills_experience"]]
+    resume_df = pd.read_csv(os.path.join("data", "example_input", "resume-10-holdout-examples.csv"))[["job_family", "resume", "years_of_experience", "skills_experience"]]
     
-
-    resume_df = resume_df[resume_df["job_family"]=="software engineer"]
-    resume_df = resume_df[resume_df["resume"].str.len() < 3000]
-
-    job_post_df = pd.read_csv(os.path.join("data", "job_posting_transformed_20240708012832.csv"))
-    job_post_df = job_post_df[job_post_df["years"]==5]
-    job_post_df = job_post_df[job_post_df["job_fam"]=="software engineer"] # there is a typo
-    job_post_df = job_post_df[job_post_df["desc"].str.len() < 3000]
-
+    resume_df = resume_df.dropna()
     
+    # job_post_df = pd.read_csv(os.path.join("data", "example_input", "jd-15-data-creation-examples.csv"))
+    job_post_df = pd.read_csv(os.path.join("data", "example_input", "jd-5-holdout-examples.csv"))
 
-    pairwise = job_post_df.iloc[0:1,:].join(
+
+    pairwise = job_post_df.join(
         resume_df
         , how="cross"
     )
@@ -36,7 +29,7 @@ if __name__ == "__main__":
     client = OpenAI()
 
     data_list = []
-
+    cnt = 0 
     for job_desc, resume in tqdm(zip(job_desc_col,resume_col), desc="Matching", ncols=100, total=pairwise.shape[0]):
         matcher = ResumeMatcher(client, job_desc, resume)
         output = matcher.check_fit()
@@ -51,6 +44,26 @@ if __name__ == "__main__":
             output["justification"], 
             output["confidence"],
         ))
+        cnt += 1 
+        if cnt % 40 == 0:
+            tmp_df = output_df = pd.DataFrame(
+                data=data_list, 
+                columns=[
+                    "job_desc",
+                    "resume",
+                    "requirement",
+                    "resume_skills",
+                    "label",
+                    "justification",
+                    "confidence",
+                ]
+            )
+            tmp_output_path = os.path.join(
+                os.getcwd(), 
+                "data", 
+                f"holdout_gpt_match_output_checkpoint_{cnt}_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+            )
+            tmp_df.to_csv(tmp_output_path, index=False)
     
     output_df = pd.DataFrame(
         data=data_list, 
@@ -68,7 +81,7 @@ if __name__ == "__main__":
     output_path = os.path.join(
         os.getcwd(), 
         "data", 
-        f"gpt_match_output_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+        f"holdout_gpt_match_output_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
     )
     output_df.to_csv(output_path, index=False)
     
