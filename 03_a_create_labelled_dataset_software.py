@@ -4,16 +4,33 @@ import os
 from tqdm import tqdm
 from datetime import datetime
 from src.gpt_sampler import ResumeMatcher
+from src.sampler import clean_df
 
 if __name__ == "__main__":
-    dev_exmaples = pd.read_csv("data/golden_example.csv")
-    print(dev_exmaples.head())
+
+
+    # resume_df = pd.read_csv(os.path.join("data", "example_input", "resume-40-data-creation-examples.csv"))[["job_family", "resume", "years_of_experience", "skills_experience"]]
+    resume_df = pd.read_csv(os.path.join("data", "example_input", "resume-10-holdout-examples.csv"))[["job_family", "resume", "years_of_experience", "skills_experience"]]
+    
+    resume_df = resume_df.dropna()
+    
+    # job_post_df = pd.read_csv(os.path.join("data", "example_input", "jd-15-data-creation-examples.csv"))
+    job_post_df = pd.read_csv(os.path.join("data", "example_input", "jd-5-holdout-examples.csv"))
+
+
+    pairwise = job_post_df.join(
+        resume_df
+        , how="cross"
+    )
+
+    job_desc_col = pairwise["desc"]
+    resume_col = pairwise["resume"]
     
     client = OpenAI()
 
     data_list = []
-
-    for job_desc, resume in tqdm(zip(dev_exmaples["job_desc"], dev_exmaples["resume"]), desc="Matching", ncols=100, total=dev_exmaples.shape[0]):
+    cnt = 0 
+    for job_desc, resume in tqdm(zip(job_desc_col,resume_col), desc="Matching", ncols=100, total=pairwise.shape[0]):
         matcher = ResumeMatcher(client, job_desc, resume)
         output = matcher.check_fit()
         summ_requirement = matcher.required_skills
@@ -22,12 +39,32 @@ if __name__ == "__main__":
             job_desc, 
             resume, 
             summ_requirement, 
-            summ_resume_skills, 
+            summ_resume_skills,
             output["answer"], 
             output["justification"], 
-            float(output["confidence"]),
+            output["confidence"],
         ))
-
+        cnt += 1 
+        if cnt % 40 == 0:
+            tmp_df = output_df = pd.DataFrame(
+                data=data_list, 
+                columns=[
+                    "job_desc",
+                    "resume",
+                    "requirement",
+                    "resume_skills",
+                    "label",
+                    "justification",
+                    "confidence",
+                ]
+            )
+            tmp_output_path = os.path.join(
+                os.getcwd(), 
+                "data", 
+                f"holdout_gpt_match_output_checkpoint_{cnt}_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+            )
+            tmp_df.to_csv(tmp_output_path, index=False)
+    
     output_df = pd.DataFrame(
         data=data_list, 
         columns=[
@@ -37,14 +74,14 @@ if __name__ == "__main__":
             "resume_skills",
             "label",
             "justification",
-            "confidence"
+            "confidence",
         ]
     )
 
     output_path = os.path.join(
         os.getcwd(), 
         "data", 
-        f"match_output_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+        f"holdout_gpt_match_output_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
     )
     output_df.to_csv(output_path, index=False)
     
